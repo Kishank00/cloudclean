@@ -1,0 +1,47 @@
+{
+    // Turn off inline gray "ghost text" suggestions (Copilot / AI completions)
+    "editor.inlineSuggest.enabled": false,
+    "github.copilot.enable": {
+        "*": false
+    },
+    "github.copilot.nextEditSuggestions.enabled": false,
+
+    // Turn off generic word-based guesses (words copied from open files)
+    "editor.wordBasedSuggestions": "off",
+
+    // Turn off snippet templates so the list only shows real symbols
+    "editor.snippetSuggestions": "none",
+
+    // Keep Python IntelliSense dropdown (e.g. `s3.` shows its methods)
+    "editor.quickSuggestions": {
+        "other": "on",
+        "comments": "off",
+        "strings": "off"
+    },
+    "editor.suggestOnTriggerCharacters": true,
+    "editor.suggest.preview": false,
+
+    // Show parameter hints (signature + docs) when typing `(`
+    "editor.parameterHints.enabled": true,
+
+    // Pylance: use the project's uv virtualenv so boto3 + stubs resolve
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.languageServer": "Pylance",
+    "python.analysis.typeCheckingMode": "basic",
+
+    // boto3 stubs mark almost every response key optional; don't flag dict["Key"] access
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportTypedDictNotRequiredAccess": "none"
+    },
+    "python.analysis.autoImportCompletions": false,
+
+    // Hide inline gray type hints so only your code shows in the editor
+    "python.analysis.inlayHints.variableTypes": false,
+    "python.analysis.inlayHints.functionReturnTypes": false,
+
+    // Format with Black on save
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true
+    }
+}
