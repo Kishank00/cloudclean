@@ -1,6 +1,19 @@
 import boto3
 from datetime import datetime, timezone
 
+HOURS_PER_MONTH = 730
+
+# Approximate ap-south-1 prices, USD per hour
+EIP_HOURLY = 0.005
+NAT_HOURLY = 0.056
+ALB_HOURLY = 0.0239
+ECR_GB_MONTHLY = 0.10
+INSTANCE_HOURLY = {
+    "t3.micro": 0.0112,
+    "t3.small": 0.0224,
+    "t3.medium": 0.0448,
+}
+
 
 def main():
     session = boto3.Session(region_name="ap-south-1", profile_name="personal")
@@ -12,11 +25,13 @@ def main():
 
     nat_gw_paginator = ec2.get_paginator("describe_nat_gateways")
     paginator = ec2.get_paginator("describe_instances")
-    list_instances(paginator)
-    find_unattached_eips(elastic_ip)
-    list_nat_gw(nat_gw_paginator)
-    list_alb(elb, alb)
-    list_ecr(ecr, 1)
+    instances = list_instances(paginator)
+    eips = find_unattached_eips(elastic_ip)
+    nats = list_nat_gw(nat_gw_paginator)
+    albs = list_alb(elb, alb)
+    images = list_ecr(ecr, 1)
+
+    print_cost(instances, eips, nats, albs, images)
 
 
 # Get names from the tag
@@ -39,7 +54,7 @@ def list_instances(paginator):
             }
         ]
     )
-    ec2_count = 0
+    running = []
     print(f"{'INSTANCE ID':<20} {'STATE':<10} {'TYPE':<10} {'LAUNCHED':<16}  NAME")
     for page in pages:
         for reservation in page["Reservations"]:
@@ -51,16 +66,22 @@ def list_instances(paginator):
                     f"{instance['LaunchTime']:%Y-%m-%d %H:%M}  "
                     f"{get_name(instance)}"
                 )
-                ec2_count += 1
-    if ec2_count == 0:
+                running.append(instance)
+    if len(running) == 0:
         print("No running EC2 instances in ap-south-1")
+
+    return running
 
 
 # Find Unattached ElasticIP's
 def find_unattached_eips(elastic_ip):
+    unattached = []
     for address in elastic_ip["Addresses"]:
         if not address.get("AssociationId"):
+            unattached.append(address)
             print(f"Unattached EIP: {address["PublicIp"]} {get_name(address)}")
+
+    return unattached
 
 
 def list_nat_gw(nat_gw_paginator):
@@ -83,6 +104,8 @@ def list_nat_gw(nat_gw_paginator):
 
     if len(nat_gateways) == 0:
         print("No NAT Gateway Found")
+
+    return nat_gateways
 
 
 def list_alb(elb, alb):
@@ -113,6 +136,8 @@ def list_alb(elb, alb):
     if len(load_balancer) == 0:
         print("No Load Balancers Found")
 
+    return load_balancer
+
 
 def count_targets(elb, alb_arn):
 
@@ -135,7 +160,7 @@ def list_ecr(ecr, max_age_days):
 
             if age > max_age_days:
                 old_images.append(image)
-                tag =image.get("imageTags", ["<untagged>"])[0][:12]
+                tag = image.get("imageTags", ["<untagged>"])[0][:12]
                 print(
                     f"{repo['repositoryName']:<24} "
                     f"{tag:<14} "
@@ -146,6 +171,39 @@ def list_ecr(ecr, max_age_days):
 
     if len(old_images) == 0:
         print("No old ECR images found")
+
+    return old_images
+
+
+def print_cost(instances, eips, nats, albs, images):
+    print("=== ESTIMATED MONTHLY COST ===")
+    instance_cost = 0
+    for instance in instances:
+        hourly = INSTANCE_HOURLY.get(instance["InstanceType"], 0)
+        instance_cost += hourly * HOURS_PER_MONTH
+    print(
+        f"{'Running instances':<20} {len(instances):<10} {f'${instance_cost:.2f}':>9}"
+    )
+
+    eip_cost = len(eips) * HOURS_PER_MONTH * EIP_HOURLY
+    print(f"{'Unattached EIPs':<20} {len(eips):<10} {f'${eip_cost:.2f}':>9}")
+
+    nat_cost = len(nats) * HOURS_PER_MONTH * NAT_HOURLY
+    print(f"{'NAT gateways':<20} {len(nats):<10} {f'${nat_cost:.2f}':>9}")
+
+    alb_cost = len(albs) * HOURS_PER_MONTH * ALB_HOURLY
+    print(f"{'Load balancers':<20} {len(albs):<10} {f'${alb_cost:.2f}':>9}")
+
+    total_bytes = 0
+    for image in images:
+        total_bytes += image["imageSizeInBytes"]
+    gb = total_bytes / (1024**3)
+    ecr_cost = gb * ECR_GB_MONTHLY
+    print(f"{'Old ECR images':<20} {f'{gb:.2f} GB':<10} {f'${ecr_cost:.2f}':>9}")
+
+    total = instance_cost + eip_cost + nat_cost + alb_cost + ecr_cost
+    print("-" * 50)
+    print(f"{'TOTAL':<31} {f'${total:.2f}':>9} / month")
 
 
 if __name__ == "__main__":
