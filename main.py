@@ -4,12 +4,16 @@ import boto3
 def main():
     session = boto3.Session(region_name="ap-south-1", profile_name="personal")
     ec2 = session.client("ec2")
+    elb = session.client("elbv2")
     elastic_ip = ec2.describe_addresses()
+    alb = elb.describe_load_balancers()
+
     nat_gw_paginator = ec2.get_paginator("describe_nat_gateways")
     paginator = ec2.get_paginator("describe_instances")
     list_instances(paginator)
     find_unattached_eips(elastic_ip)
     list_nat_gw(nat_gw_paginator)
+    list_alb(alb)
 
 
 # Get names from the tag
@@ -76,6 +80,25 @@ def list_nat_gw(nat_gw_paginator):
 
     if len(nat_gateways) == 0:
         print("No NAT Gateway Found")
+
+
+def list_alb(alb):
+    print(f"{'ALB NAME':<18} {'STATE':<8} {'TYPE':<12} {'VPC':<22} CREATED")
+
+    load_balancer = []
+
+    for lb in alb["LoadBalancers"]:
+        load_balancer.append(lb)
+        print(
+            f"{lb['LoadBalancerName']:<18} "
+            f"{lb['State']['Code']:<8} "
+            f"{lb['Type']:<12} "
+            f"{lb['VpcId']:<22} "
+            f"{lb['CreatedTime']:%Y-%m-%d %H:%M}"
+        )
+
+    if len(load_balancer) == 0:
+        print("No Load Balancers Found")
 
 
 if __name__ == "__main__":
