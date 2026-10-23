@@ -3,6 +3,11 @@ import boto3
 session = boto3.Session(region_name="ap-south-1", profile_name="personal")
 
 ec2 = session.client("ec2")
+paginator = ec2.get_paginator("describe_instances")
+
+
+def main():
+    list_instances()
 
 
 def get_name(instance):
@@ -15,12 +20,25 @@ def get_name(instance):
 
 
 def list_instances():
-    response = ec2.describe_instances()
-    for reservation in response["Reservations"]:
-        for instance in reservation["Instances"]:
-            print(
-                f"InstanceID: {instance['InstanceId']}, State: {instance['State']['Name']}, InstanceType: {instance['InstanceType']}, LaunchTime: {instance['LaunchTime']}, Name: {get_name(instance)}"
-            )
+    pages = paginator.paginate(
+        Filters=[
+            {
+                "Name": "instance-state-name",
+                "Values": ["running"],
+            }
+        ]
+    )
+    ec2_count = 0
+    for page in pages:
+        for reservation in page["Reservations"]:
+            for instance in reservation["Instances"]:
+                print(
+                    f"InstanceID: {instance['InstanceId']}, State: {instance['State']['Name']}, InstanceType: {instance['InstanceType']}, LaunchTime: {instance['LaunchTime']}, Name: {get_name(instance)}"
+                )
+                ec2_count += 1
+    if ec2_count == 0:
+        print("No running EC2 instances in ap-south-1")
 
 
-list_instances()
+if __name__ == "__main__":
+    main()
