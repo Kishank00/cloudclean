@@ -27,11 +27,16 @@ def list_instances(paginator):
         ]
     )
     ec2_count = 0
+    print(f"{'INSTANCE ID':<20} {'STATE':<10} {'TYPE':<10} {'LAUNCHED':<16}  NAME")
     for page in pages:
         for reservation in page["Reservations"]:
             for instance in reservation["Instances"]:
                 print(
-                    f"InstanceID: {instance['InstanceId']}, State: {instance['State']['Name']}, InstanceType: {instance['InstanceType']}, LaunchTime: {instance['LaunchTime']}, Name: {get_name(instance)}"
+                    f"{instance['InstanceId']:<20} "
+                    f"{instance['State']['Name']:<10} "
+                    f"{instance['InstanceType']:<10} "
+                    f"{instance['LaunchTime']:%Y-%m-%d %H:%M}  "
+                    f"{get_name(instance)}"
                 )
                 ec2_count += 1
     if ec2_count == 0:
