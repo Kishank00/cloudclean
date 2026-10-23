@@ -4,10 +4,10 @@ import boto3
 def main():
     session = boto3.Session(region_name="ap-south-1", profile_name="personal")
     ec2 = session.client("ec2")
-    eip = ec2.describe_addresses()
+    elastic_ip = ec2.describe_addresses()
     paginator = ec2.get_paginator("describe_instances")
     list_instances(paginator)
-    find_unattached_eips(eip)
+    find_unattached_eips(elastic_ip)
 
 
 def get_name(instance):
@@ -45,8 +45,8 @@ def list_instances(paginator):
         print("No running EC2 instances in ap-south-1")
 
 
-def find_unattached_eips(eip):
-    for address in eip["Addresses"]:
+def find_unattached_eips(elastic_ip):
+    for address in elastic_ip["Addresses"]:
         if not address.get("AssociationId"):
             print(f"Unattached EIP: {address["PublicIp"]} {get_name(address)}")
 
