@@ -1,3 +1,4 @@
+import argparse
 import boto3
 from datetime import datetime, timezone
 
@@ -16,7 +17,20 @@ INSTANCE_HOURLY = {
 
 
 def main():
-    session = boto3.Session(region_name="ap-south-1", profile_name="personal")
+    parser = argparse.ArgumentParser(
+        description="Find forgotten AWS resources that cost money"
+    )
+    parser.add_argument("--region", default="ap-south-1", help="AWS region to scan")
+    parser.add_argument("--profile", default="personal", help="AWS CLI profile to use")
+    parser.add_argument(
+        "--max-age",
+        type=int,
+        default=90,
+        help="flag ECR images older than this many days",
+    )
+    args = parser.parse_args()
+
+    session = boto3.Session(region_name=args.region, profile_name=args.profile)
     ec2 = session.client("ec2")
     elb = session.client("elbv2")
     elastic_ip = ec2.describe_addresses()
@@ -29,7 +43,7 @@ def main():
     eips = find_unattached_eips(elastic_ip)
     nats = list_nat_gw(nat_gw_paginator)
     albs = list_alb(elb, alb)
-    images = list_ecr(ecr, 1)
+    images = list_ecr(ecr, args.max_age)
 
     print_cost(instances, eips, nats, albs, images)
 
@@ -68,7 +82,7 @@ def list_instances(paginator):
                 )
                 running.append(instance)
     if len(running) == 0:
-        print("No running EC2 instances in ap-south-1")
+        print("No running EC2 instances found")
 
     return running
 
