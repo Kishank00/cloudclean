@@ -13,7 +13,7 @@ def main():
     list_instances(paginator)
     find_unattached_eips(elastic_ip)
     list_nat_gw(nat_gw_paginator)
-    list_alb(alb)
+    list_alb(elb, alb)
 
 
 # Get names from the tag
@@ -82,23 +82,42 @@ def list_nat_gw(nat_gw_paginator):
         print("No NAT Gateway Found")
 
 
-def list_alb(alb):
-    print(f"{'ALB NAME':<18} {'STATE':<8} {'TYPE':<12} {'VPC':<22} CREATED")
+def list_alb(elb, alb):
+    print(
+        f"{'ALB NAME':<18} {'STATE':<8} {'TYPE':<12} {'VPC':<22} {'CREATED':<16}  TARGETS"
+    )
 
     load_balancer = []
 
     for lb in alb["LoadBalancers"]:
         load_balancer.append(lb)
+        targets = count_targets(elb, lb["LoadBalancerArn"])
+
         print(
             f"{lb['LoadBalancerName']:<18} "
             f"{lb['State']['Code']:<8} "
             f"{lb['Type']:<12} "
             f"{lb['VpcId']:<22} "
-            f"{lb['CreatedTime']:%Y-%m-%d %H:%M}"
+            f"{lb['CreatedTime']:%Y-%m-%d %H:%M}  "
+            f"{targets}"
         )
+
+        if targets == 0:
+            print(
+                f"{lb['LoadBalancerName']} has no targets, it costs money but serves nothing"
+            )
 
     if len(load_balancer) == 0:
         print("No Load Balancers Found")
+
+
+def count_targets(elb, alb_arn):
+
+    tg_response = elb.describe_target_groups(LoadBalancerArn=alb_arn)
+    tg_arn = tg_response["TargetGroups"][0]["TargetGroupArn"]
+
+    tg_health = elb.describe_target_health(TargetGroupArn=tg_arn)
+    return len(tg_health["TargetHealthDescriptions"])
 
 
 if __name__ == "__main__":
