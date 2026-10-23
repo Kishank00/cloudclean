@@ -1,4 +1,5 @@
 import boto3
+from datetime import datetime, timezone
 
 
 def main():
@@ -7,6 +8,7 @@ def main():
     elb = session.client("elbv2")
     elastic_ip = ec2.describe_addresses()
     alb = elb.describe_load_balancers()
+    ecr = session.client("ecr")
 
     nat_gw_paginator = ec2.get_paginator("describe_nat_gateways")
     paginator = ec2.get_paginator("describe_instances")
@@ -14,6 +16,7 @@ def main():
     find_unattached_eips(elastic_ip)
     list_nat_gw(nat_gw_paginator)
     list_alb(elb, alb)
+    list_ecr(ecr, 1)
 
 
 # Get names from the tag
@@ -118,6 +121,31 @@ def count_targets(elb, alb_arn):
 
     tg_health = elb.describe_target_health(TargetGroupArn=tg_arn)
     return len(tg_health["TargetHealthDescriptions"])
+
+
+def list_ecr(ecr, max_age_days):
+    now = datetime.now(timezone.utc)
+    print(f"{'REPOSITORY':<24} {'TAG':<14} {'PUSHED':<16}  {'AGE':<5} SIZE")
+    old_images = []
+    response = ecr.describe_repositories()
+    for repo in response["repositories"]:
+        images = ecr.describe_images(repositoryName=repo["repositoryName"])
+        for image in images["imageDetails"]:
+            age = (now - image["imagePushedAt"]).days
+
+            if age > max_age_days:
+                old_images.append(image)
+                tag =image.get("imageTags", ["<untagged>"])[0][:12]
+                print(
+                    f"{repo['repositoryName']:<24} "
+                    f"{tag:<14} "
+                    f"{image['imagePushedAt']:%Y-%m-%d %H:%M}  "
+                    f"{str(age) + 'd':<5} "
+                    f"{image['imageSizeInBytes'] / 1024 / 1024:.0f} MB"
+                )
+
+    if len(old_images) == 0:
+        print("No old ECR images found")
 
 
 if __name__ == "__main__":
