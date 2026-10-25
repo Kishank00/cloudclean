@@ -1,7 +1,7 @@
 [project]
 name = "cloudclean"
 version = "0.1.0"
-description = "Add your description here"
+description = "Find forgotten AWS resources that cost money and estimate the monthly bill"
 readme = "README.md"
 authors = [
     { name = "Kishank00", email = "itskshn007@gmail.com" }
