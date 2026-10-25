@@ -41,8 +41,11 @@ def main():
     nat_gw_paginator = ec2.get_paginator("describe_nat_gateways")
     paginator = ec2.get_paginator("describe_instances")
     instances = list_instances(paginator)
+    print_instances(instances)
     eips = find_unattached_eips(elastic_ip)
+    print_eips(eips)
     nats = list_nat_gw(nat_gw_paginator)
+    print_nat_gw(nats)
     albs = list_alb(elb, alb)
     images = list_ecr(ecr, args.max_age)
     amis = list_amis(ec2)
@@ -73,22 +76,26 @@ def list_instances(paginator):
         ]
     )
     running = []
-    print(f"{'INSTANCE ID':<20} {'STATE':<10} {'TYPE':<10} {'LAUNCHED':<16}  NAME")
     for page in pages:
         for reservation in page["Reservations"]:
             for instance in reservation["Instances"]:
-                print(
-                    f"{instance['InstanceId']:<20} "
-                    f"{instance['State']['Name']:<10} "
-                    f"{instance['InstanceType']:<10} "
-                    f"{instance['LaunchTime']:%Y-%m-%d %H:%M}  "
-                    f"{get_name(instance)}"
-                )
                 running.append(instance)
-    if len(running) == 0:
-        print("No running EC2 instances found")
 
     return running
+
+
+def print_instances(instances):
+    print(f"{'INSTANCE ID':<20} {'STATE':<10} {'TYPE':<10} {'LAUNCHED':<16}  NAME")
+    for instance in instances:
+        print(
+            f"{instance['InstanceId']:<20} "
+            f"{instance['State']['Name']:<10} "
+            f"{instance['InstanceType']:<10} "
+            f"{instance['LaunchTime']:%Y-%m-%d %H:%M}  "
+            f"{get_name(instance)}"
+        )
+    if len(instances) == 0:
+        print("No running EC2 instances found")
 
 
 # Find Unattached ElasticIP's
@@ -97,33 +104,40 @@ def find_unattached_eips(elastic_ip):
     for address in elastic_ip["Addresses"]:
         if not address.get("AssociationId"):
             unattached.append(address)
-            print(f"Unattached EIP: {address["PublicIp"]} {get_name(address)}")
 
     return unattached
+
+
+def print_eips(eips):
+    for address in eips:
+        print(f"Unattached EIP: {address["PublicIp"]} {get_name(address)}")
 
 
 def list_nat_gw(nat_gw_paginator):
     pages = nat_gw_paginator.paginate(
         Filters=[{"Name": "state", "Values": ["available"]}]
     )
-    print(f"{'NAT ID':<22} {'STATE':<10} {'VPC':<22} {'CREATED':<16}  NAME")
 
     nat_gateways = []
     for page in pages:
         for ngw in page["NatGateways"]:
             nat_gateways.append(ngw)
-            print(
-                f"{ngw['NatGatewayId']:<22} "
-                f"{ngw['State']:<10} "
-                f"{ngw['VpcId']:<22} "
-                f"{ngw['CreateTime']:%Y-%m-%d %H:%M}  "
-                f"{get_name(ngw)}"
-            )
-
-    if len(nat_gateways) == 0:
-        print("No NAT Gateway Found")
 
     return nat_gateways
+
+
+def print_nat_gw(nat_gateways):
+    print(f"{'NAT ID':<22} {'STATE':<10} {'VPC':<22} {'CREATED':<16}  NAME")
+    for ngw in nat_gateways:
+        print(
+            f"{ngw['NatGatewayId']:<22} "
+            f"{ngw['State']:<10} "
+            f"{ngw['VpcId']:<22} "
+            f"{ngw['CreateTime']:%Y-%m-%d %H:%M}  "
+            f"{get_name(ngw)}"
+        )
+    if len(nat_gateways) == 0:
+        print("No NAT Gateway Found")
 
 
 def list_alb(elb, alb):
