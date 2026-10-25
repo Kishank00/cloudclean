@@ -49,9 +49,13 @@ def main():
     albs = list_alb(elb, alb)
     print_alb(albs)
     images = list_ecr(ecr, args.max_age)
+    print_ecr(images)
     amis = list_amis(ec2)
+    print_amis(amis)
     snapshots = list_snapshots(ec2)
+    print_snapshots(snapshots)
     orphans = find_orphan_snapshots(amis, snapshots)
+    print_orphans(orphans)
 
     print_cost(instances, eips, nats, albs, images, orphans)
 
@@ -186,29 +190,33 @@ def count_targets(elb, alb_arn):
 
 def list_ecr(ecr, max_age_days):
     now = datetime.now(timezone.utc)
-    print(f"{'REPOSITORY':<24} {'TAG':<14} {'PUSHED':<16}  {'AGE':<5} SIZE")
     old_images = []
     response = ecr.describe_repositories()
     for repo in response["repositories"]:
         images = ecr.describe_images(repositoryName=repo["repositoryName"])
         for image in images["imageDetails"]:
             age = (now - image["imagePushedAt"]).days
+            image["AgeDays"] = age
 
             if age > max_age_days:
                 old_images.append(image)
-                tag = image.get("imageTags", ["<untagged>"])[0][:12]
-                print(
-                    f"{repo['repositoryName']:<24} "
-                    f"{tag:<14} "
-                    f"{image['imagePushedAt']:%Y-%m-%d %H:%M}  "
-                    f"{str(age) + 'd':<5} "
-                    f"{image['imageSizeInBytes'] / 1024 / 1024:.0f} MB"
-                )
-
-    if len(old_images) == 0:
-        print("No old ECR images found")
 
     return old_images
+
+
+def print_ecr(images):
+    print(f"{'REPOSITORY':<24} {'TAG':<14} {'PUSHED':<16}  {'AGE':<5} SIZE")
+    for image in images:
+        tag = image.get("imageTags", ["<untagged>"])[0][:12]
+        print(
+            f"{image['repositoryName']:<24} "
+            f"{tag:<14} "
+            f"{image['imagePushedAt']:%Y-%m-%d %H:%M}  "
+            f"{str(image['AgeDays']) + 'd':<5} "
+            f"{image['imageSizeInBytes'] / 1024 / 1024:.0f} MB"
+        )
+    if len(images) == 0:
+        print("No old ECR images found")
 
 
 def print_cost(instances, eips, nats, albs, images, orphans):
@@ -256,9 +264,15 @@ def list_amis(ec2):
     )
 
     amis = []
-    print(f"{'AMI ID':<22} {'CREATED':<16}  NAME")
     for image in response["Images"]:
         amis.append(image)
+
+    return amis
+
+
+def print_amis(amis):
+    print(f"{'AMI ID':<22} {'CREATED':<16}  NAME")
+    for image in amis:
         print(
             f"{image['ImageId']:<22} "
             f"{image['CreationDate'][:16]:<16}  "
@@ -267,26 +281,28 @@ def list_amis(ec2):
     if len(amis) == 0:
         print("No AMIs found")
 
-    return amis
-
 
 def list_snapshots(ec2):
     response = ec2.describe_snapshots(
         OwnerIds=["self"],
     )
     snapshots = []
-    print(f"{'SNAPSHOT ID':<24} {'SIZE':<6} {'CREATED':<16}")
     for snap in response["Snapshots"]:
         snapshots.append(snap)
+
+    return snapshots
+
+
+def print_snapshots(snapshots):
+    print(f"{'SNAPSHOT ID':<24} {'SIZE':<6} {'CREATED':<16}")
+    for snap in snapshots:
         print(
             f"{snap['SnapshotId']:<24} "
             f"{str(snap['VolumeSize']) + ' GB':<6} "
             f"{snap['StartTime']:%Y-%m-%d %H:%M}"
         )
-
     if len(snapshots) == 0:
         print("No snapshots found")
-    return snapshots
 
 
 def find_orphan_snapshots(amis, snapshots):
@@ -300,12 +316,17 @@ def find_orphan_snapshots(amis, snapshots):
     for snap in snapshots:
         if snap["SnapshotId"] not in used:
             orphans.append(snap)
-            print(
-                f"Orphan snapshot: {snap['SnapshotId']} ({snap['VolumeSize']} GB), no AMI uses it"
-            )
+
+    return orphans
+
+
+def print_orphans(orphans):
+    for snap in orphans:
+        print(
+            f"Orphan snapshot: {snap['SnapshotId']} ({snap['VolumeSize']} GB), no AMI uses it"
+        )
     if len(orphans) == 0:
         print("No orphan snapshots found")
-    return orphans
 
 
 if __name__ == "__main__":
