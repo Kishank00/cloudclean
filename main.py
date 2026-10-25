@@ -1,5 +1,6 @@
 import argparse
 import boto3
+import json
 from datetime import datetime, timezone
 
 HOURS_PER_MONTH = 730
@@ -29,6 +30,11 @@ def main():
         default=90,
         help="flag ECR images older than this many days",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="print results as JSON instead of tables",
+    )
     args = parser.parse_args()
 
     session = boto3.Session(region_name=args.region, profile_name=args.profile)
@@ -40,24 +46,40 @@ def main():
 
     nat_gw_paginator = ec2.get_paginator("describe_nat_gateways")
     paginator = ec2.get_paginator("describe_instances")
-    instances = list_instances(paginator)
-    print_instances(instances)
-    eips = find_unattached_eips(elastic_ip)
-    print_eips(eips)
-    nats = list_nat_gw(nat_gw_paginator)
-    print_nat_gw(nats)
-    albs = list_alb(elb, alb)
-    print_alb(albs)
-    images = list_ecr(ecr, args.max_age)
-    print_ecr(images)
-    amis = list_amis(ec2)
-    print_amis(amis)
-    snapshots = list_snapshots(ec2)
-    print_snapshots(snapshots)
-    orphans = find_orphan_snapshots(amis, snapshots)
-    print_orphans(orphans)
 
-    print_cost(instances, eips, nats, albs, images, orphans)
+    # find
+    instances = list_instances(paginator)
+    eips = find_unattached_eips(elastic_ip)
+    nats = list_nat_gw(nat_gw_paginator)
+    albs = list_alb(elb, alb)
+    images = list_ecr(ecr, args.max_age)
+    amis = list_amis(ec2)
+    snapshots = list_snapshots(ec2)
+    orphans = find_orphan_snapshots(amis, snapshots)
+
+    # print
+    if args.json:
+        result = {
+            "instances": instances,
+            "unattached_eips": eips,
+            "nat_gateways": nats,
+            "load_balancers": albs,
+            "old_ecr_images": images,
+            "amis": amis,
+            "snapshots": snapshots,
+            "orphan_snapshots": orphans,
+        }
+        print(json.dumps(result, default=str, indent=2))
+    else:
+        print_instances(instances)
+        print_eips(eips)
+        print_nat_gw(nats)
+        print_alb(albs)
+        print_ecr(images)
+        print_amis(amis)
+        print_snapshots(snapshots)
+        print_orphans(orphans)
+        print_cost(instances, eips, nats, albs, images, orphans)
 
 
 # Get names from the tag
