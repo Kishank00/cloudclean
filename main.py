@@ -8,6 +8,7 @@ HOURS_PER_MONTH = 730
 EIP_HOURLY = 0.005
 NAT_HOURLY = 0.056
 ALB_HOURLY = 0.0239
+SNAPSHOT_GB_MONTHLY = 0.05
 ECR_GB_MONTHLY = 0.10
 INSTANCE_HOURLY = {
     "t3.micro": 0.0112,
@@ -44,8 +45,11 @@ def main():
     nats = list_nat_gw(nat_gw_paginator)
     albs = list_alb(elb, alb)
     images = list_ecr(ecr, args.max_age)
+    amis = list_amis(ec2)
+    snapshots = list_snapshots(ec2)
+    orphans = find_orphan_snapshots(amis, snapshots)
 
-    print_cost(instances, eips, nats, albs, images)
+    print_cost(instances, eips, nats, albs, images, orphans)
 
 
 # Get names from the tag
@@ -189,7 +193,7 @@ def list_ecr(ecr, max_age_days):
     return old_images
 
 
-def print_cost(instances, eips, nats, albs, images):
+def print_cost(instances, eips, nats, albs, images, orphans):
     print("=== ESTIMATED MONTHLY COST ===")
     instance_cost = 0
     for instance in instances:
@@ -215,9 +219,75 @@ def print_cost(instances, eips, nats, albs, images):
     ecr_cost = gb * ECR_GB_MONTHLY
     print(f"{'Old ECR images':<20} {f'{gb:.2f} GB':<10} {f'${ecr_cost:.2f}':>9}")
 
-    total = instance_cost + eip_cost + nat_cost + alb_cost + ecr_cost
+    snapshot_gb = 0
+    for snap in orphans:
+        snapshot_gb += snap["VolumeSize"]
+    snapshot_cost = snapshot_gb * SNAPSHOT_GB_MONTHLY
+    print(
+        f"{'Orphan snapshots':<20} {f'{snapshot_gb} GB':<10} {f'${snapshot_cost:.2f}':>9}"
+    )
+
+    total = instance_cost + eip_cost + nat_cost + alb_cost + ecr_cost + snapshot_cost
     print("-" * 50)
     print(f"{'TOTAL':<31} {f'${total:.2f}':>9} / month")
+
+
+def list_amis(ec2):
+    response = ec2.describe_images(
+        Owners=["self"],
+    )
+
+    amis = []
+    print(f"{'AMI ID':<22} {'CREATED':<16}  NAME")
+    for image in response["Images"]:
+        amis.append(image)
+        print(
+            f"{image['ImageId']:<22} "
+            f"{image['CreationDate'][:16]:<16}  "
+            f"{image['Name']}"
+        )
+    if len(amis) == 0:
+        print("No AMIs found")
+
+    return amis
+
+
+def list_snapshots(ec2):
+    response = ec2.describe_snapshots(
+        OwnerIds=["self"],
+    )
+    snapshots = []
+    print(f"{'SNAPSHOT ID':<24} {'SIZE':<6} {'CREATED':<16}")
+    for snap in response["Snapshots"]:
+        snapshots.append(snap)
+        print(
+            f"{snap['SnapshotId']:<24} "
+            f"{str(snap['VolumeSize']) + ' GB':<6} "
+            f"{snap['StartTime']:%Y-%m-%d %H:%M}"
+        )
+
+    if len(snapshots) == 0:
+        print("No snapshots found")
+    return snapshots
+
+
+def find_orphan_snapshots(amis, snapshots):
+    used = set()
+    for image in amis:
+        for mapping in image["BlockDeviceMappings"]:
+            if "Ebs" in mapping:
+                used.add(mapping["Ebs"]["SnapshotId"])
+
+    orphans = []
+    for snap in snapshots:
+        if snap["SnapshotId"] not in used:
+            orphans.append(snap)
+            print(
+                f"Orphan snapshot: {snap['SnapshotId']} ({snap['VolumeSize']} GB), no AMI uses it"
+            )
+    if len(orphans) == 0:
+        print("No orphan snapshots found")
+    return orphans
 
 
 if __name__ == "__main__":
