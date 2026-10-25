@@ -47,6 +47,7 @@ def main():
     nats = list_nat_gw(nat_gw_paginator)
     print_nat_gw(nats)
     albs = list_alb(elb, alb)
+    print_alb(albs)
     images = list_ecr(ecr, args.max_age)
     amis = list_amis(ec2)
     snapshots = list_snapshots(ec2)
@@ -141,34 +142,35 @@ def print_nat_gw(nat_gateways):
 
 
 def list_alb(elb, alb):
-    print(
-        f"{'ALB NAME':<18} {'STATE':<8} {'TYPE':<12} {'VPC':<22} {'CREATED':<16}  TARGETS"
-    )
-
     load_balancer = []
 
     for lb in alb["LoadBalancers"]:
         load_balancer.append(lb)
-        targets = count_targets(elb, lb["LoadBalancerArn"])
+        lb["TargetCount"] = count_targets(elb, lb["LoadBalancerArn"])
 
+    return load_balancer
+
+
+def print_alb(albs):
+    print(
+        f"{'ALB NAME':<18} {'STATE':<8} {'TYPE':<12} {'VPC':<22} {'CREATED':<16}  TARGETS"
+    )
+    for lb in albs:
         print(
             f"{lb['LoadBalancerName']:<18} "
             f"{lb['State']['Code']:<8} "
             f"{lb['Type']:<12} "
             f"{lb['VpcId']:<22} "
             f"{lb['CreatedTime']:%Y-%m-%d %H:%M}  "
-            f"{targets}"
+            f"{lb["TargetCount"]}"
         )
-
-        if targets == 0:
+        if lb["TargetCount"] == 0:
             print(
                 f"{lb['LoadBalancerName']} has no targets, it costs money but serves nothing"
             )
 
-    if len(load_balancer) == 0:
+    if len(albs) == 0:
         print("No Load Balancers Found")
-
-    return load_balancer
 
 
 def count_targets(elb, alb_arn):
