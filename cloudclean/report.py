@@ -1,12 +1,4 @@
-from cloudclean.pricing import (
-    HOURS_PER_MONTH,
-    EIP_HOURLY,
-    NAT_HOURLY,
-    ALB_HOURLY,
-    SNAPSHOT_GB_MONTHLY,
-    ECR_GB_MONTHLY,
-    INSTANCE_HOURLY,
-)
+from cloudclean.pricing import calculate_cost
 
 
 # Get names from the tag
@@ -90,42 +82,36 @@ def print_ecr(images):
 
 
 def print_cost(instances, eips, nats, albs, images, orphans):
-    print("=== ESTIMATED MONTHLY COST ===")
-    instance_cost = 0
-    for instance in instances:
-        hourly = INSTANCE_HOURLY.get(instance["InstanceType"], 0)
-        instance_cost += hourly * HOURS_PER_MONTH
-    print(
-        f"{'Running instances':<20} {len(instances):<10} {f'${instance_cost:.2f}':>9}"
-    )
+    cost = calculate_cost(instances, eips, nats, albs, images, orphans)
 
-    eip_cost = len(eips) * HOURS_PER_MONTH * EIP_HOURLY
-    print(f"{'Unattached EIPs':<20} {len(eips):<10} {f'${eip_cost:.2f}':>9}")
-
-    nat_cost = len(nats) * HOURS_PER_MONTH * NAT_HOURLY
-    print(f"{'NAT gateways':<20} {len(nats):<10} {f'${nat_cost:.2f}':>9}")
-
-    alb_cost = len(albs) * HOURS_PER_MONTH * ALB_HOURLY
-    print(f"{'Load balancers':<20} {len(albs):<10} {f'${alb_cost:.2f}':>9}")
-
-    total_bytes = 0
+    ecr_gb = 0
     for image in images:
-        total_bytes += image["imageSizeInBytes"]
-    gb = total_bytes / (1024**3)
-    ecr_cost = gb * ECR_GB_MONTHLY
-    print(f"{'Old ECR images':<20} {f'{gb:.2f} GB':<10} {f'${ecr_cost:.2f}':>9}")
-
+        ecr_gb += image["imageSizeInBytes"] / (1024**3)
     snapshot_gb = 0
     for snap in orphans:
         snapshot_gb += snap["VolumeSize"]
-    snapshot_cost = snapshot_gb * SNAPSHOT_GB_MONTHLY
-    print(
-        f"{'Orphan snapshots':<20} {f'{snapshot_gb} GB':<10} {f'${snapshot_cost:.2f}':>9}"
-    )
 
-    total = instance_cost + eip_cost + nat_cost + alb_cost + ecr_cost + snapshot_cost
+    print("=== ESTIMATED MONTHLY COST ===")
+    print(
+        f"{'Running instances':<20} {len(instances):<10} {f'${cost['instances']:.2f}':>9}"
+    )
+    print(
+        f"{'Unattached EIPs':<20} {len(eips):<10} {f'${cost['unattached_eips']:.2f}':>9}"
+    )
+    print(
+        f"{'NAT gateways':<20} {len(nats):<10} {f'${cost['nat_gateways']:.2f}':>9}"
+    )
+    print(
+        f"{'Load balancers':<20} {len(albs):<10} {f'${cost['load_balancers']:.2f}':>9}"
+    )
+    print(
+        f"{'Old ECR images':<20} {f'{ecr_gb:.2f} GB':<10} {f'${cost['old_ecr_images']:.2f}':>9}"
+    )
+    print(
+        f"{'Orphan snapshots':<20} {f'{snapshot_gb} GB':<10} {f'${cost['orphan_snapshots']:.2f}':>9}"
+    )
     print("-" * 50)
-    print(f"{'TOTAL':<31} {f'${total:.2f}':>9} / month")
+    print(f"{'TOTAL':<31} {f'${cost['total']:.2f}':>9} / month")
 
 
 def print_amis(amis):

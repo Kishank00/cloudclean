@@ -9,6 +9,7 @@ from cloudclean.ec2 import (
 )
 from cloudclean.elb import list_alb
 from cloudclean.ecr import list_ecr
+from cloudclean.pricing import calculate_cost
 
 from fastapi import FastAPI
 
@@ -69,3 +70,15 @@ def get_load_balancers():
 @app.get("/ecr-images")
 def get_ecr_images(max_age: int = 90):
     return list_ecr(ecr, max_age)
+
+@app.get("/cost")
+def get_cost(max_age: int = 90):
+    instances = list_instances(ec2.get_paginator("describe_instances"))
+    eips = find_unattached_eips(ec2.describe_addresses())
+    nats = list_nat_gw(ec2.get_paginator("describe_nat_gateways"))
+    albs = list_alb(elb, elb.describe_load_balancers())
+    images = list_ecr(ecr, max_age)
+    amis = list_amis(ec2)
+    snapshots = list_snapshots(ec2)
+    orphans = find_orphan_snapshots(amis, snapshots)
+    return calculate_cost(instances, eips, nats, albs, images, orphans)
