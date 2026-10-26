@@ -15,4 +15,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "boto3-stubs[ec2,s3]>=1.43.117",
+    "pytest>=9.1.1",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
